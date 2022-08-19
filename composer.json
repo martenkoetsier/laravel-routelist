@@ -1,0 +1,20 @@
+{
+    "name": "martenkoetsier/laravel-routelist",
+    "description": "Alternative to route:list console command with more emphasis on route names, shortened controller names, more compact middleware view and other small tweaks.",
+    "license": "MIT",
+    "keywords": ["routelist", "routes"],
+    "autoload": {
+        "psr-4": {
+            "Martenkoetsier\\LaravelRoutelist\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Marten Koetsier",
+            "email": "martenkoetsier@users.noreply.github.com"
+        }
+    ],
+    "require": {
+        "laravel/framework": "^9.0"
+    }
+}
