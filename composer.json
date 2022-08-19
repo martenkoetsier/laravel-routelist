@@ -16,5 +16,12 @@
     ],
     "require": {
         "laravel/framework": "^9.0"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Martenkoetsier\\LaravelRoutelist\\Providers\\LaravelRoutelistProvider"
+            ]
+        }
     }
 }
