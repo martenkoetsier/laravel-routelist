@@ -23,7 +23,7 @@ command. The new output will:
 composer require martenkoetsier/laravel-routelist
 ```
 
-The automatic package discovery will add the service provider to the `config/app.php` file.
+The automatic package discovery will add the service provider to your project.
 
 ## Usage
 
