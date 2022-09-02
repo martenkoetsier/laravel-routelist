@@ -127,12 +127,11 @@ class RouteListCommand extends Command {
             $output = [$output];
 
             // add middleware info if applicable
-            // author choice: always show middleware info, also in non-verbose mode. Middleware is listed by their
-            // aliases as defined in the App\Http\Kernel where possible or by class name otherwise. In verbose mode,
-            // middleware is always listed by full class name.
-            if ($middleware) {
+            // Middleware is listed by their aliases as defined in the App\Http\Kernel where possible or by class name
+            // otherwise. In very verbose mode, middleware is always listed by full class name.
+            if ($this->output->isVerbose() && $middleware) {
                 // replace middleware class names into aliases from Kernel
-                if (!$this->output->isVerbose()) {
+                if (!$this->output->isVeryVerbose()) {
                     $middleware = str_replace(
                         array_values($knownMiddleware),
                         array_keys($knownMiddleware),
