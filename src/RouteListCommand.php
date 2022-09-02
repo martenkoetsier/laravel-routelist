@@ -39,6 +39,7 @@ class RouteListCommand extends Command {
         // determine the maximum width of the uri and method for alignment
         $maxUri = max(array_map('mb_strlen', $routes->pluck('uri')->all()));
         $maxMethod = max(array_map('mb_strlen', $routes->pluck('method')->all()));
+        $maxName = max(array_map('mb_strlen', $routes->pluck('name')->all()));
 
         $terminalWidth = $this->getTerminalWidth();
 
@@ -46,7 +47,7 @@ class RouteListCommand extends Command {
 
         $knownMiddleware = resolve(HttpKernel::class)->getRouteMiddleware();
 
-        return $routes->map(function ($route) use ($maxUri, $maxMethod, $terminalWidth, $knownMiddleware) {
+        return $routes->map(function ($route) use ($maxUri, $maxMethod, $maxName, $terminalWidth, $knownMiddleware) {
             [
                 'action' => $action,
                 'name' => $name,
@@ -56,41 +57,75 @@ class RouteListCommand extends Command {
                 'uri' => $uri,
             ] = $route;
 
+            if ($middleware) {
+                // replace middleware class names into aliases from Kernel
+                if (!$this->output->isVerbose()) {
+                    $middleware = str_replace(
+                        array_values($knownMiddleware),
+                        array_keys($knownMiddleware),
+                        $middleware
+                    );
+                }
+            }
+
+
             // spacer right after the method, to align the uri
             $spacer1 = str_repeat(' ', max($maxMethod - mb_strlen($method), 0));
 
             // spacer between the uri and the route name
             $spacer2 = str_repeat(' ', max($maxUri - mb_strlen($uri), 0));
 
+            // spacer between the route name and middleware (if applicable)
+            $spacer3 = str_repeat(' ', max($maxName - mb_strlen($name), 0));
+            $mw = str_replace("\n", "  ", $middleware);
+            $mwsep = ' ';
+            if ($this->output->isVerbose()) {
+                $spacer3 = '';
+                $mw = '';
+                $mwsep = '';
+            }
+
             // spacer between the route name and action (action is right aligned)
-            $spacer3 = str_repeat(' ', max(
-                $terminalWidth - mb_strlen("$method $spacer1 $uri $spacer2 $name $action") - ($action ? 1 : 0),
+            $spacer4 = str_repeat(' ', max(
+                $terminalWidth - mb_strlen("$method $spacer1 $uri $spacer2 $name$mwsep$spacer3$mwsep$mw $action") - ($action ? 1 : 0),
                 0
             ));
 
-            // if the output is too long, try to shorten it. Start with reducing spacer2 length (move the route name to
-            // the left). If that is not enough and we are not in non-verbose mode, shorten the action (in verbose mode,
-            // the line just spills over to the next console line).
+            // if the output is too long, try to shorten it. Start with reducing spacer3 length (move the middleware to
+            // the left). If that is not enough, reduce spacer2 length (move the route name and middleware to the left).
+            // If that is still not enough and we are not in non-verbose mode, shorten the middleware. If that is still
+            // not enough and we are not in non-verbose mode, shorten the action. In verbose mode, the line just spills
+            // over to the next console line.
             if (
                 $action
-                && mb_strlen("$method $spacer1 $uri $spacer2 $name $spacer3 $action") > $terminalWidth
+                && mb_strlen("$method $spacer1 $uri $spacer2 $name$mwsep$spacer3$mwsep$mw $spacer4 $action") > $terminalWidth
             ) {
-                if (strlen($spacer3) === 0) {
+                if (strlen($spacer4) === 0) {
+                    while (
+                        strlen($spacer3) > 0
+                        && mb_strlen("$method $spacer1 $uri $spacer2 $name$mwsep$spacer3$mwsep$mw $spacer4 $action") > $terminalWidth
+                    ) {
+                        $spacer3 = substr($spacer3, 1);
+                    }
                     while (
                         strlen($spacer2) > 0
-                        && mb_strlen("$method $spacer1 $uri $spacer2 $name $spacer3 $action") > $terminalWidth
+                        && mb_strlen("$method $spacer1 $uri $spacer2 $name$mwsep$spacer3$mwsep$mw $spacer4 $action") > $terminalWidth
                     ) {
                         $spacer2 = substr($spacer2, 1);
                     }
                 }
-                if (
-                    !$this->output->isVerbose()
-                    && mb_strlen("$method $spacer1 $uri $spacer2 $name $spacer3 $action") > $terminalWidth
-                ) {
-                    $action = '…' . substr(
-                        $action,
-                        - ($terminalWidth - mb_strlen("$method $spacer1 $uri $spacer2 $name $spacer3 "))
-                    );
+                if (!$this->output->isVerbose()) {
+                    while (mb_strlen($mw) > 1
+                        && mb_strlen("$method $spacer1 $uri $spacer2 $name$mwsep$spacer3$mwsep$mw $spacer4 $action") > $terminalWidth
+                    ) {
+                        $mw = mb_substr($mw, 0, -2) . '…';
+                    }
+                    if (mb_strlen("$method $spacer1 $uri $spacer2 $name$mwsep$spacer3$mwsep$mw $spacer4 $action") > $terminalWidth) {
+                        $action = '…' . mb_substr(
+                            $action,
+                            - ($terminalWidth - 1 - mb_strlen("$method $spacer1 $uri $spacer2 $name$mwsep$spacer3$mwsep$mw $spacer4 "))
+                        );
+                    }
                 }
             }
 
@@ -104,16 +139,19 @@ class RouteListCommand extends Command {
             $uri = '<fg=white>' . preg_replace('#({[^}]+})#', '<fg=yellow>$1</>', $uri) . '</>';
             $spacer2 = " $spacer2 ";
             $name = $name ? "<fg=green>$name</>" : "";
-            $spacer3 = " $spacer3 ";
+            if (!$this->output->isVerbose()) {
+                $spacer3 = " $spacer3 ";
+            }
+            $spacer4 = " $spacer4 ";
             $action = $action ? "<fg=blue>" . str_replace(['©', '@'], ['<fg=white>©</>', '∷'], $action) . "</>" : '';
 
             // combine fields into a single, formatted line of output
-            $output = '<fg=#6C7280>' . $method . $spacer1 . $uri . $spacer2 . $name . $spacer3 . $action . '</>';
+            $output = '<fg=#6C7280>' . $method . $spacer1 . $uri . $spacer2 . $name . $spacer3 . $mw . $spacer4 . $action . '</>';
 
             // detect the larger spans of white space and replace those by space-dot-space' sequences, aligning the dots
             // to fixed stops
             // for this, we need to know the string length of the _visible_ output, not the formatting codes.
-            $unformatted = str_split(preg_replace('/<.*?>/', '', $output), 3);
+            $unformatted = mb_str_split(preg_replace('/<.*?>/', '', $output), 3);
             $unformatted = implode("", array_map(function ($chunk) {
                 return $chunk === '   ' ? ' . ' : $chunk;
             }, $unformatted));
